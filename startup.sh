@@ -82,26 +82,43 @@ cleanup_container() {
 }
 
 
+# --- 架构检测与适配 ---
+echo "开始检测系统架构..."
+ARCH=$(uname -m)
+echo "当前系统架构为: $ARCH"
+
+if [ "$ARCH" = "x86_64" ]; then
+    TM_IMAGE="traffmonetizer/cli_v2:latest"
+    echo "已匹配 AMD/Intel 架构，将使用镜像: $TM_IMAGE"
+elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+    TM_IMAGE="traffmonetizer/cli_v2:arm64v8"
+    echo "已匹配 ARM64 架构，将使用镜像: $TM_IMAGE"
+else
+    # 针对其他罕见架构的后备方案
+    TM_IMAGE="traffmonetizer/cli_v2:latest"
+    echo "警告：未知的系统架构 $ARCH，将尝试使用默认镜像: $TM_IMAGE"
+fi
+
+
 # --- 运行 Docker 容器 ---
 echo "开始配置并运行 Docker 容器..."
 
-# 1. Traffmonetizer
-cleanup_container "tm" "traffmonetizer/cli_v2"
+# 1. Traffmonetizer (自适应架构)
+cleanup_container "tm" "$TM_IMAGE"
 echo "运行 Traffmonetizer 容器..."
-docker run -d --restart=always --name tm traffmonetizer/cli_v2 start accept --token "WovlB9V4nql+H2MQ1FAcv6HBgy5plSrA/VRv4S25d+c="
+docker run -d --restart=always --name tm "$TM_IMAGE" start accept --token "WovlB9V4nql+H2MQ1FAcv6HBgy5plSrA/VRv4S25d+c="
 
-# 2. Repocket
+# 2. Repocket (官方支持多架构自动拉取)
 cleanup_container "repocket" "repocket/repocket"
 echo "运行 Repocket 容器..."
 docker run -d --restart=always -e RP_EMAIL="sijuly@outlook.com" -e RP_API_KEY="60725bcd-b4ff-4e1d-b254-e8fc6cfdf2dc" --name repocket repocket/repocket
 
-# 3. EarnFM Client
+# 3. EarnFM Client (官方支持多架构自动拉取)
 cleanup_container "earnfm-client" "earnfm/earnfm-client:latest"
 echo "运行 EarnFM Client 容器..."
 docker run -d --restart=always -e EARNFM_TOKEN="ce203a4c-627b-4b44-934d-58689ca6cf7f" --name earnfm-client earnfm/earnfm-client:latest
 
-# 4. Watchtower (用于自动更新 earnfm-client)
-# 注：这里的 interval 依旧保留了你的 60 秒设置
+# 4. Watchtower (官方支持多架构自动拉取)
 cleanup_container "watchtower" "containrrr/watchtower"
 echo "运行 Watchtower 容器..."
 docker run -d --restart=always --name watchtower -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --include-stopped --include-restarting --revive-stopped --interval 60 earnfm-client
