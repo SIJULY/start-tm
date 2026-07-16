@@ -3,9 +3,9 @@
 # 脚本出错时立即退出
 set -e
 
-# 将所有输出记录到日志文件，方便排查
+# 将所有输出同时记录到日志文件和终端控制台，方便排查
 LOG_FILE="/root/startup_script_main.log"
-exec > "$LOG_FILE" 2>&1
+exec > >(tee -a "$LOG_FILE") 2>exec > "$LOG_FILE" 2>&11
 
 echo "===== 开机脚本开始于: $(date) ====="
 
