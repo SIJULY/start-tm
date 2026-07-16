@@ -3,11 +3,12 @@
 # 脚本出错时立即退出
 set -e
 
-# 将所有输出同时记录到日志文件和终端控制台，方便排查
-LOG_FILE="/root/startup_script_main.log"
-exec > >(tee -a "$LOG_FILE") 2>exec > "$LOG_FILE" 2>&11
+# --- 日志记录设置 ---
+# 注：已将静默运行代码注释掉。现在脚本执行时，你可以直接在终端看到实时进度！
+# LOG_FILE="/root/startup_script_main.log"
+# exec > "$LOG_FILE" 2>&1
 
-echo "===== 开机脚本开始于: $(date) ====="
+echo "===== 部署脚本开始于: $(date) ====="
 
 # --- 前置检查 ---
 echo "检查网络连接..."
@@ -33,7 +34,6 @@ if ! command -v curl &> /dev/null; then
 fi
 echo "curl 已安装。"
 
-
 # --- 安装 Docker ---
 echo "检查 Docker 是否已安装..."
 if ! command -v docker &> /dev/null; then
@@ -52,7 +52,6 @@ if ! command -v docker &> /dev/null; then
 else
     echo "Docker 已安装。"
 fi
-
 
 # --- 定义容器清理函数 ---
 # 作用：部署前检测是否存在同名或使用同类镜像的容器，若存在则关闭并删除
@@ -81,7 +80,6 @@ cleanup_container() {
     fi
 }
 
-
 # --- 架构检测与适配 ---
 echo "开始检测系统架构..."
 ARCH=$(uname -m)
@@ -94,36 +92,33 @@ elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
     TM_IMAGE="traffmonetizer/cli_v2:arm64v8"
     echo "已匹配 ARM64 架构，将使用镜像: $TM_IMAGE"
 else
-    # 针对其他罕见架构的后备方案
     TM_IMAGE="traffmonetizer/cli_v2:latest"
     echo "警告：未知的系统架构 $ARCH，将尝试使用默认镜像: $TM_IMAGE"
 fi
 
-
 # --- 运行 Docker 容器 ---
 echo "开始配置并运行 Docker 容器..."
 
-# 1. Traffmonetizer (自适应架构)
+# 1. Traffmonetizer (架构自适应)
 cleanup_container "tm" "$TM_IMAGE"
 echo "运行 Traffmonetizer 容器..."
 docker run -d --restart=always --name tm "$TM_IMAGE" start accept --token "WovlB9V4nql+H2MQ1FAcv6HBgy5plSrA/VRv4S25d+c="
 
-# 2. Repocket (官方支持多架构自动拉取)
+# 2. Repocket
 cleanup_container "repocket" "repocket/repocket"
 echo "运行 Repocket 容器..."
 docker run -d --restart=always -e RP_EMAIL="sijuly@outlook.com" -e RP_API_KEY="60725bcd-b4ff-4e1d-b254-e8fc6cfdf2dc" --name repocket repocket/repocket
 
-# 3. EarnFM Client (官方支持多架构自动拉取)
+# 3. EarnFM Client
 cleanup_container "earnfm-client" "earnfm/earnfm-client:latest"
 echo "运行 EarnFM Client 容器..."
 docker run -d --restart=always -e EARNFM_TOKEN="ce203a4c-627b-4b44-934d-58689ca6cf7f" --name earnfm-client earnfm/earnfm-client:latest
 
-# 4. Watchtower (官方支持多架构自动拉取)
+# 4. Watchtower (已修复 API 版本兼容性)
 cleanup_container "watchtower" "containrrr/watchtower"
 echo "运行 Watchtower 容器..."
-docker run -d --restart=always --name watchtower -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --include-stopped --include-restarting --revive-stopped --interval 60 earnfm-client
+docker run -d --restart=always -e DOCKER_API_VERSION=1.40 --name watchtower -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --include-stopped --include-restarting --revive-stopped --interval 60 earnfm-client
 
 echo "Docker 容器配置完成。"
-
-echo "===== 开机脚本结束于: $(date) ====="
+echo "===== 部署脚本结束于: $(date) ====="
 exit 0
